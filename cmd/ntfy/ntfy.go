@@ -40,6 +40,7 @@ func (ch *Ntfy) GetInfo() *plugin.Info {
 				"en_US": "Ntfy.sh server (default https://ntfy.sh)",
 			},
 			Default:  "https://ntfy.sh/",
+			Required: true,
 		},
 		{
 			Name: "username",
