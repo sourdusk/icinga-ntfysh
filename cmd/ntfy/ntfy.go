@@ -147,7 +147,7 @@ func (ch *Ntfy) SendNotification(req *plugin.NotificationRequest) error {
 	// Get ntfy address from user's list
 	var ntfyAddress string = ""
 	for _, addr := range(req.Contact.Addresses) {
-		if addr.Type == "Ntfy.sh" {
+		if addr.Type == "ntfy" {
 			ntfyAddress = addr.Address
 			break
 		}
@@ -158,34 +158,58 @@ func (ch *Ntfy) SendNotification(req *plugin.NotificationRequest) error {
 		return fmt.Errorf("Ntfy.sh address must not be blank.")
 	}
 
-	var severityFmt string = ""
-	var emojiTags string = ""
-	var priority string = ""
+	
+	var emojiTags string
+	var priority string
+	var body string
+	var title string
 
-	switch severity := req.Incident.Severity; severity {
-	case "crit":
-		severityFmt = "CRITICAL"
-		emojiTags = "bangbang"
-		priority = "urgent"
-	case "warning":
-		severityFmt = "WARNING"
-		emojiTags = "warning"
-		priority = "high"
-	case "ok":
-		severityFmt = "OK"
-		emojiTags = "white_check_mark"
+	// Various event types
+	if req.Event.Type == "acknowledgement-set" || req.Event.Type == "downtime-start" {
 		priority = "default"
-	case "down":
-		severityFmt = "DOWN"
-		emojiTags = "bangbang"
-		priority = "urgent"
-	default:
-		severityFmt = "UNKNOWN"
-		emojiTags = "question"
-		priority = "urgent"
+		emojiTags = "information_source," + req.Event.Type
+		var alertType string
+		if req.Event.Type == "acknowledgement-set" {
+			alertType = "Acknowledgement Set"
+		} else {
+			alertType = "Downtime Started"
+		}
+		title = alertType + " on " + req.Object.Name
+		body = "Acknowledged by " + req.Contact.FullName + "\n" + req.Event.Message
+	} else if req.Event.Type == "downtime-end" {
+		priority = "high"
+		emojiTags = "information_source," + req.Event.Type
+		title = "Downtime Ended on " + req.Object.Name
+	} else if req.Event.Type == "state" {
+		var severityFmt string
+		switch severity := req.Incident.Severity; severity {
+		case "crit":
+			severityFmt = "CRITICAL"
+			emojiTags = "bangbang"
+			priority = "urgent"
+		case "warning":
+			severityFmt = "WARNING"
+			emojiTags = "warning"
+			priority = "high"
+		case "ok":
+			severityFmt = "OK"
+			emojiTags = "white_check_mark"
+			priority = "default"
+		case "down":
+			severityFmt = "DOWN"
+			emojiTags = "bangbang"
+			priority = "urgent"
+		default:
+			severityFmt = "UNKNOWN"
+			emojiTags = "question"
+			priority = "urgent"
+		}
+		title = req.Object.Tags["service"] + " on " + req.Object.Tags["host"] + " is " + severityFmt
+		body = "```" + req.Event.Message + "```"
+	} else {
+		return nil
 	}
-
-	var body string = "```" + req.Event.Message + "```"
+	
 
 	httpReq, err := http.NewRequest("POST", ch.NtfyServer + ntfyAddress, strings.NewReader(body))
 	if err != nil {
@@ -200,11 +224,11 @@ func (ch *Ntfy) SendNotification(req *plugin.NotificationRequest) error {
 		httpReq.Header.Set("Authorization", "Bearer " + ch.AccessToken)
 	}
 
-	httpReq.Header.Set("Title", req.Object.Tags["service"] + " on " + req.Object.Tags["host"] + " is **" + severityFmt + "**")
+	httpReq.Header.Set("Title", title)
 	httpReq.Header.Set("Priority", priority)
 	httpReq.Header.Set("Tags", emojiTags)
-	httpReq.Header.Set("Action", "view,Open Icinga," + req.Object.Url)
-	
+	httpReq.Header.Set("Action", "view,Open Icinga," + strings.Replace(req.Object.Url, "localhost", "mon.gelat.in", -1))
+	httpReq.Header.Set("Markdown", "yes")
 
 	httpResp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
