@@ -120,7 +120,7 @@ func (ch *Ntfy) SetConfig(jsonStr json.RawMessage) error {
 	}
 
 	// Make sure both username and password are either filled or not
-	if !((ch.Username == "" && ch.Password == "") || (ch.AccessToken != "" && ch.Password != "")) {
+	if !((ch.Username == "" && ch.Password == "") || (ch.Username != "" && ch.Password != "")) {
 		return fmt.Errorf("Username and password must either both be empty or both be filled out")
 	}
 
